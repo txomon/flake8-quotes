@@ -1,5 +1,6 @@
-import flake8_quotes
 import mock
+
+import flake8_quotes
 
 
 @mock.patch('flake8_quotes.errors')
@@ -90,5 +91,3 @@ def test_raw_dq_with_dq_inside(errors):
     qc.check_quote(0, 0, 'r"asd\\"asd"')  # r"asd\"asd"
     assert len(errors.method_calls) == 1
     assert errors.Q100.called
-
-

@@ -2,35 +2,34 @@ __author__ = 'Javier Domingo Cansino <javierdo1@gmail.com>'
 __version__ = '0.0.1'
 
 import ast
-from functools import partial
-
 import logging
+from functools import partial
 
 logging.basicConfig(level=logging.DEBUG,
                     format='%(levelname)-8s %(asctime)s %(message)s')
 logger = logging.getLogger()
 
 DQ = '"'
-SQ = '\''
+SQ = "'"
 
 
 class StringChecker(ast.NodeVisitor):
-    def visit_Module(self, node):
+    def visit_Module(self, node):  # noqa
         self.strings = list()
         self.generic_visit(node)
 
-    def visit_Str(self, node):
+    def visit_Str(self, node):  # noqa
         self.strings.append(node)
 
 
-class errors(object):
+class errors(object):  # noqa
     @staticmethod
     def gen_error(code, msg, *args, **kw):
         assert len(code) == 4
         if args:
             if kw:
                 raise TypeError(
-                    "You may give positional or keyword arguments, not both")
+                    'You may give positional or keyword arguments, not both')
         args = args or kw
         return (code + ' ' + msg) % args
 
@@ -122,10 +121,10 @@ class QuotesChecker(object):
             quote = raw_quote
         quote_value = self.quote_value(quote)
         if quote.startswith(DQ):
-            if not SQ in quote_value:
+            if SQ not in quote_value:
                 return errors.Q100(quote)
         if quote.startswith(SQ):
-            if SQ in quote_value and not DQ in quote_value:
+            if SQ in quote_value and DQ not in quote_value:
                 return errors.Q101(quote)
 
     def run(self):
