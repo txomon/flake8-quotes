@@ -9,6 +9,9 @@ logging.basicConfig(level=logging.DEBUG,
                     format='%(levelname)-8s %(asctime)s %(message)s')
 logger = logging.getLogger()
 
+DQ = '"'
+SQ = '\''
+
 
 class StringChecker(ast.NodeVisitor):
     def visit_Module(self, node):
@@ -17,6 +20,21 @@ class StringChecker(ast.NodeVisitor):
 
     def visit_Str(self, node):
         self.strings.append(node)
+
+
+def error(code, msg, *args, **kw):
+    assert len(code) == 4
+    if args:
+        if kw:
+            raise TypeError(
+                "You may give positional or keyword arguments, not both")
+    args = args or kw
+    return (code + ' ' + msg) % args
+
+
+def error_single_quotes(string):
+    return error('Q100', 'String should be defined with single quotes: %s',
+                 string)
 
 
 class QuotesChecker(object):
@@ -50,6 +68,7 @@ class QuotesChecker(object):
             is_raw = True
         for i, char in enumerate(line):
             if char == quote_type and not escaped:
+                i += 1
                 break
             if char == '\\' and not is_raw:
                 escaped = True
@@ -60,14 +79,15 @@ class QuotesChecker(object):
     def return_quote(self, lineno, colno, string):
         '''Classify string and run it's quote extractor'''
         if colno == -1:
-            logger.error('Docstrings not implemented')
+            logger.error('Docstrings not implemented: %d:%d %s',
+                         lineno, colno, repr(string))
             return  # TODO: Docstring
         simple_quote = self.return_single_quote(lineno - 1, colno)
         try:
             m = ast.parse(simple_quote)
         except SyntaxError:
             logger.error('Parsing error, does it have correct syntax?:'
-                         ' %d:%d %s => %s', lineno, colno, string,
+                         ' %d:%d %s => %s', lineno, colno, repr(string),
                          simple_quote)
             return  # TODO: Know when this can happen
         s = StringChecker()
@@ -78,11 +98,15 @@ class QuotesChecker(object):
             yield lineno, colno, simple_quote
             return
         # TODO: Multiline string
-        logger.error('Expanding multiple lines not implemented')
+        logger.error(
+            'Expanding multiple lines not implemented: %d:%d %s => %s',
+            lineno, colno, repr(string), simple_quote
+        )
 
     def check_quote(self, line, col, quote):
-        if quote.startswith('"'):
-            return 'String should begin with single quotes.'
+        if quote.startswith(DQ):
+            if not SQ in quote:
+                return error_single_quotes(quote)
 
     def run(self):
         for line, colno, string in self.return_all_strings():
