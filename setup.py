@@ -20,7 +20,7 @@ setup(
     py_modules=['flake8_quotes'],
     install_requires=[
         'setuptools',
-        'flake',
+        'flake8',
     ],
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
