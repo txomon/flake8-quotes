@@ -2,6 +2,7 @@ __author__ = 'Javier Domingo Cansino <javierdo1@gmail.com>'
 __version__ = '0.0.1'
 
 import ast
+from functools import partial
 
 import logging
 
@@ -22,19 +23,24 @@ class StringChecker(ast.NodeVisitor):
         self.strings.append(node)
 
 
-def error(code, msg, *args, **kw):
-    assert len(code) == 4
-    if args:
-        if kw:
-            raise TypeError(
-                "You may give positional or keyword arguments, not both")
-    args = args or kw
-    return (code + ' ' + msg) % args
+class errors(object):
+    @staticmethod
+    def gen_error(code, msg, *args, **kw):
+        assert len(code) == 4
+        if args:
+            if kw:
+                raise TypeError(
+                    "You may give positional or keyword arguments, not both")
+        args = args or kw
+        return (code + ' ' + msg) % args
 
 
-def error_single_quotes(string):
-    return error('Q100', 'String should be defined with single quotes: %s',
-                 string)
+errors.Q100 = partial(errors.gen_error, 'Q100',
+                      'Single quotes should be used by default: %s')
+
+errors.Q101 = partial(errors.gen_error, 'Q101',
+                      'Double quotes should be used to avoid single quote '
+                      'scaping : %s')
 
 
 class QuotesChecker(object):
@@ -45,6 +51,8 @@ class QuotesChecker(object):
     def __init__(self, tree, filename, *args, **kwargs):
         self.tree = tree
         self.filename = filename
+        if not filename:
+            return
         with open(filename) as f:
             self.lines = f.readlines()
             f.seek(0)
@@ -76,6 +84,13 @@ class QuotesChecker(object):
             escaped = False
         return line[:i]
 
+    def quote_value(self, quote):
+        qast = ast.parse(quote)
+        sc = StringChecker()
+        sc.visit(qast)
+        assert len(sc.strings) == 1
+        return next(iter(sc.strings)).s
+
     def return_quote(self, lineno, colno, string):
         '''Classify string and run it's quote extractor'''
         if colno == -1:
@@ -84,16 +99,12 @@ class QuotesChecker(object):
             return  # TODO: Docstring
         simple_quote = self.return_single_quote(lineno - 1, colno)
         try:
-            m = ast.parse(simple_quote)
+            parsed_string = self.quote_value(simple_quote)
         except SyntaxError:
             logger.error('Parsing error, does it have correct syntax?:'
                          ' %d:%d %s => %s', lineno, colno, repr(string),
                          simple_quote)
             return  # TODO: Know when this can happen
-        s = StringChecker()
-        s.visit(m)
-        assert len(s.strings) == 1
-        parsed_string = next(iter(s.strings)).s
         if parsed_string == string:
             yield lineno, colno, simple_quote
             return
@@ -103,10 +114,19 @@ class QuotesChecker(object):
             lineno, colno, repr(string), simple_quote
         )
 
-    def check_quote(self, line, col, quote):
+    def check_quote(self, line, col, raw_quote):
+        is_raw = raw_quote.startswith('r')
+        if is_raw:
+            quote = raw_quote[1:]
+        else:
+            quote = raw_quote
+        quote_value = self.quote_value(quote)
         if quote.startswith(DQ):
-            if not SQ in quote:
-                return error_single_quotes(quote)
+            if not SQ in quote_value:
+                return errors.Q100(quote)
+        if quote.startswith(SQ):
+            if SQ in quote_value and not DQ in quote_value:
+                return errors.Q101(quote)
 
     def run(self):
         for line, colno, string in self.return_all_strings():

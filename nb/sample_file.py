@@ -16,6 +16,7 @@ class A:
                  'Domingo'
         self.e = b"asdf"
         self.f = r"sad"
+        self.g = 'asd"asd'
         print("abcde", string)
 
     def func(self):
