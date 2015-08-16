@@ -18,6 +18,10 @@ class A:
         self.f = r"sad"
         print("abcde", string)
 
-    def a(self):
+    def func(self):
         """ asdfla """
-        pass
+        self.a = "'"
+        self.b = '"'
+        self.c = "\""
+        self.d = '\"'
+        self.e = """asdand"""
