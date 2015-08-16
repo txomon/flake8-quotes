@@ -8,7 +8,7 @@ Flake8 plugin for spece checking
 Installation
 ------------
 
-``python3 setup.py install``
+From PyPi ``pip install flake8-quotes2`` or ``python3 setup.py install`` from source
 
 Credits
 -------
