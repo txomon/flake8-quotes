@@ -1,5 +1,5 @@
 __author__ = 'Javier Domingo Cansino <javierdo1@gmail.com>'
-__version__ = '0.0.2'
+__version__ = '0.0.1'
 
 import ast
 import logging

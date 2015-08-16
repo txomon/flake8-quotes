@@ -18,10 +18,7 @@ setup(
     version=get_version(),
     url='https://github.com/txomon/flake8-quotes',
     py_modules=['flake8_quotes'],
-    install_requires=[
-        'setuptools',
-        'flake8',
-    ],
+    install_requires=['setuptools'],
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
         'Environment :: Console',
