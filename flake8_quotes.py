@@ -21,25 +21,71 @@ class StringChecker(ast.NodeVisitor):
     def visit_Str(self, node):  # noqa
         self.strings.append(node)
 
+def quote_value(quote):
+    qast = ast.parse(quote)
+    sc = StringChecker()
+    sc.visit(qast)
+    assert len(sc.strings) == 1
+    return next(iter(sc.strings)).s
+
 
 class errors(object):  # noqa
-    @staticmethod
-    def gen_error(code, msg, *args, **kw):
-        assert len(code) == 4
-        if args:
-            if kw:
-                raise TypeError(
-                    'You may give positional or keyword arguments, not both')
-        args = args or kw
-        return (code + ' ' + msg) % args
+    Q100 = 'Q100 Single quotes should be used by default'
+    Q101 = 'Q101 Double quotes should be used to avoid single quote scaping'
+    Q102 = 'Q102 When double and single, single quotes should be used'
+    Q103 = 'Q103 With single quotes, double quotes should not be escaped'
+    Q104 = 'Q104 With double quotes, single quotes should not be escaped'
 
+class PropertyString(str):
+    def __init__(self, *args, line=0, col=0, **kwargs):
+        super(PropertyString, self).__init__(*args, **kwargs)
+        self.value = quote_value(self)
+        self.text = self
+        self.line = line
+        self.col = col
 
-errors.Q100 = partial(errors.gen_error, 'Q100',
-                      'Single quotes should be used by default: %s')
+        self.is_raw = self.text.startswith('r')
+        if self.is_raw:
+            self.text = self.text[1:]
 
-errors.Q101 = partial(errors.gen_error, 'Q101',
-                      'Double quotes should be used to avoid single quote '
-                      'scaping : %s')
+        self.is_bin = self.text.startswith('b')
+        if self.is_bin:
+            self.text = self.text[1:]
+
+        self.is_dq = self.text.startswith('"')
+        self.is_sq = self.text.startswith("'")
+
+        self.is_docstring = self.text[:2] in ('"""', "'''")
+        if self.is_docstring:
+            self.text = self.text[3:-3]
+        else:
+            self.text = self.text[1:-1]
+
+    def escaped_quote(self):
+        if self.is_docstring:
+            return # Docstrings don't have such escaping thing
+        escaped, line, col = False, self.line, self.col
+        for ch in self.text:
+            if ch is '\\':
+                escaped = not escaped
+                col += 1
+                continue
+            if not escaped:
+                col += 1
+                continue
+            escaped = False
+            if ch is 'n':
+                line += 1
+                col = 0
+                continue
+            if ch is 't': # TODO: Check what flake does with tabs
+                col +=4
+                continue
+            if ch is '"':
+                yield line, col, ch
+            elif ch is "'":
+                yield line, col, ch
+            col += 1
 
 
 class QuotesChecker(object):
@@ -83,14 +129,7 @@ class QuotesChecker(object):
             escaped = False
         return line[:i]
 
-    def quote_value(self, quote):
-        qast = ast.parse(quote)
-        sc = StringChecker()
-        sc.visit(qast)
-        assert len(sc.strings) == 1
-        return next(iter(sc.strings)).s
-
-    def return_quote(self, lineno, colno, string):
+    def extract_quote(self, lineno, colno, string):
         '''Classify string and run it's quote extractor'''
         if colno == -1:
             logger.error('Docstrings not implemented: %d:%d %s',
@@ -113,23 +152,35 @@ class QuotesChecker(object):
             lineno, colno, repr(string), simple_quote
         )
 
-    def check_quote(self, line, col, raw_quote):
-        is_raw = raw_quote.startswith('r')
+    def escaped_quote(self, line, col, raw, quote):
+        is_raw = raw.startswith('r')
+        for ch in raw:
+
+    def check_quote(self, line, col, raw):
+        '''Find errors in the given quote.'''
+        is_raw = raw.startswith('r')
         if is_raw:
-            quote = raw_quote[1:]
+            quote = raw[1:]
         else:
-            quote = raw_quote
+            quote = raw
+        is_docstring = quote[0:2] in ('"""', "'''")
         quote_value = self.quote_value(quote)
         if quote.startswith(DQ):
-            if SQ not in quote_value:
-                return errors.Q100(quote)
+            if SQ in quote_value:
+                if DQ in quote_value:
+                    yield line, col, errors.Q102
+            else:
+                yield line, col, errors.Q100
         if quote.startswith(SQ):
             if SQ in quote_value and DQ not in quote_value:
-                return errors.Q101(quote)
+                yield line, col, errors.Q101
 
     def run(self):
+        # For each parsed string
         for line, colno, string in self.return_all_strings():
-            for line_s, col_s, quote in self.return_quote(line, colno, string):
-                error = self.check_quote(line_s, col_s, quote)
-                if error:
-                    yield (line_s, col_s, error, type(self))
+            # Extract unjoined quotes, ej. s = 'a' 'b' => 'a', 'b'
+            for line_s, col_s, quote in self.extract_quote(line, colno, string):
+                # Search errors in each quote
+                for line_e, col_e, error = self.check_quote(line_s, col_s, quote):
+                    # Send error message
+                    yield (line_e, col_e, error, type(self))
